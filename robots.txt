@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://piyushk8541-lab.github.io/Premkumar-technicians/sitemap.xml
