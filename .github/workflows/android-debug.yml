@@ -52,7 +52,7 @@ jobs:
               assert hashlib.sha256(original).hexdigest() == expected, f'Invalid baseline: {path}'
               assert hashlib.sha256((root / path).read_bytes()).hexdigest() == expected, f'Website changed: {path}'
           changed = subprocess.check_output(['git', 'diff', '--name-only', baseline['commit'], 'HEAD'], text=True).splitlines()
-          exceptions = {'.github/workflows/android-debug.yml', 'vercel.json'}
+          exceptions = {'.github/workflows/android-debug.yml', '.github/workflows/android-release.yml', 'vercel.json'}
           assert all(p.startswith('premkumar-android-app/') or p in exceptions for p in changed), changed
           guard = json.loads((root / 'vercel.json').read_text())
           assert guard['git']['deploymentEnabled'] == {'arena/01a09a19-premkumar-technicians': False}
@@ -100,6 +100,7 @@ jobs:
       - name: Build local web assets and synchronize Android
         run: |
           npm run check:config
+          npm run check:release
           mkdir -p artifacts/ci
           npm run check:icons | tee artifacts/ci/icon-validation.txt
           npm run sync:android

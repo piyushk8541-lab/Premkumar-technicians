@@ -19,7 +19,8 @@
     "icons": "node scripts/generate-icons.mjs",
     "check:config": "tsc --noEmit --skipLibCheck --moduleResolution bundler --module esnext capacitor.config.ts",
     "doctor:android": "node scripts/toolchain-doctor.mjs",
-    "check:icons": "node --test scripts/icon-assets.test.mjs"
+    "check:icons": "node --test scripts/icon-assets.test.mjs",
+    "check:release": "python3 -m unittest discover -s scripts/release -p \"test_*.py\" -v"
   },
   "dependencies": {
     "@capacitor/android": "8.4.3",

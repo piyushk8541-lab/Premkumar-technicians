@@ -18,3 +18,19 @@ android/app/src/main/assets/capacitor.plugins.json
 .env
 .env.*
 !.env.example
+
+# Never commit release signing material, including encoded/exported copies.
+*.jceks
+*.p12
+*.pfx
+*.pem
+*.key
+*.b64
+*.base64
+keystore.properties
+signing.properties
+release-signing.properties
+
+# Local release-preparation test bytecode.
+__pycache__/
+*.py[cod]
