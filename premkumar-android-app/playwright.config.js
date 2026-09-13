@@ -16,6 +16,12 @@ export default defineConfig({
     launchOptions,
     screenshot: 'only-on-failure',
   },
-  // Start the preview with npm run preview -- --port 4173 before running tests.
-  // No managed server here: the Arena process tools own long-running servers.
+  // On Arena, start the local preview using the process tools before running tests.
+  // GitHub CI has no Arena process tools: Playwright owns and cleans up its preview.
+  webServer: process.env.CI ? {
+    command: 'npm run preview -- --port 4173 --strictPort',
+    url: 'http://127.0.0.1:4173',
+    reuseExistingServer: false,
+    timeout: 30000,
+  } : undefined,
 });

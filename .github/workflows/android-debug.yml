@@ -100,6 +100,8 @@ jobs:
       - name: Build local web assets and synchronize Android
         run: |
           npm run check:config
+          mkdir -p artifacts/ci
+          npm run check:icons | tee artifacts/ci/icon-validation.txt
           npm run sync:android
           python3 - <<'PY'
           import json, pathlib
@@ -121,14 +123,42 @@ jobs:
           assert (root / 'android/app/src/main/assets/public/index.html').is_file()
           PY
 
-      - name: Verify Gradle 8.14.3 and build the real debug APK
+      - name: Run existing browser regression tests with Playwright Chromium
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: artifacts/ci/browser-tests.xml
+        run: |
+          npx playwright install --with-deps chromium
+          npm test -- --reporter=list,junit
+
+      - name: Verify Gradle 8.14.3, build debug APK, run unit tests and Android lint
         run: |
           chmod +x android/gradlew
           cd android
           ./gradlew --version | tee "$RUNNER_TEMP/premkumar-gradle-version.txt"
           grep -F 'Gradle 8.14.3' "$RUNNER_TEMP/premkumar-gradle-version.txt"
-          ./gradlew --no-daemon --stacktrace :app:assembleDebug
+          ./gradlew --no-daemon --stacktrace :app:assembleDebug :app:testDebugUnitTest :app:lintDebug :app:assembleDebugAndroidTest
           test -s app/build/outputs/apk/debug/app-debug.apk
+          python3 - <<'PY'
+          import pathlib, xml.etree.ElementTree as ET
+          reports = list(pathlib.Path('app/build/test-results/testDebugUnitTest').glob('TEST-*.xml'))
+          assert reports, 'Native unit-test results were not generated'
+          tests = failures = errors = 0
+          for report in reports:
+              suite = ET.parse(report).getroot()
+              tests += int(suite.get('tests', 0))
+              failures += int(suite.get('failures', 0))
+              errors += int(suite.get('errors', 0))
+          assert tests > 0 and failures == errors == 0, (tests, failures, errors)
+          lint = ET.parse('app/build/reports/lint-results-debug.xml').getroot()
+          fatal = [issue.get('id') for issue in lint if issue.get('severity') in ('Error', 'Fatal')]
+          assert not fatal, fatal
+          warnings = sum(issue.get('severity') == 'Warning' for issue in lint)
+          summary = f'Native unit tests: {tests} passed; failures: {failures}; errors: {errors}.\n'
+          summary += f'Android lint: no errors/fatals; {warnings} warnings.\n'
+          summary += 'Instrumentation test APK compiled only; device/emulator tests were not executed.\n'
+          pathlib.Path('../artifacts/ci/native-validation.txt').write_text(summary)
+          print(summary)
+          PY
 
       - name: Verify APK signature, package, SDK and alignment
         run: |
@@ -138,6 +168,7 @@ jobs:
           "$tools/apksigner" verify --verbose --print-certs "$apk" > artifacts/ci/signature-verification.txt
           "$tools/aapt" dump badging "$apk" > artifacts/ci/apk-metadata.txt
           grep -F "package: name='com.premkumar.technicians'" artifacts/ci/apk-metadata.txt
+          grep -F "application-label:'Prem Kumar Technicians'" artifacts/ci/apk-metadata.txt
           grep -F "sdkVersion:'24'" artifacts/ci/apk-metadata.txt
           grep -F "targetSdkVersion:'36'" artifacts/ci/apk-metadata.txt
           grep -F 'application-debuggable' artifacts/ci/apk-metadata.txt
@@ -152,6 +183,9 @@ jobs:
               native = [p for p in archive.namelist() if p.endswith('.so')]
               print(f'APK ZIP integrity verified: {apk.stat().st_size} bytes; native libraries: {native}')
           PY
+          mkdir -p artifacts/ci/native-reports
+          cp android/app/build/reports/lint-results-debug.* artifacts/ci/native-reports/
+          cp android/app/build/test-results/testDebugUnitTest/TEST-*.xml artifacts/ci/native-reports/
           cp "$apk" artifacts/ci/app-debug.apk
           (cd artifacts/ci && sha256sum app-debug.apk > SHA256SUMS.txt)
 
@@ -202,6 +236,10 @@ jobs:
             premkumar-android-app/artifacts/ci/signature-verification.txt
             premkumar-android-app/artifacts/ci/alignment-verification.txt
             premkumar-android-app/artifacts/ci/release-task-graph.txt
+            premkumar-android-app/artifacts/ci/icon-validation.txt
+            premkumar-android-app/artifacts/ci/browser-tests.xml
+            premkumar-android-app/artifacts/ci/native-validation.txt
+            premkumar-android-app/artifacts/ci/native-reports/
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
@@ -222,6 +260,11 @@ jobs:
             echo 'Application ID: com.premkumar.technicians. Minimum Android: 7.0 / API 24. Keep Android System WebView updated. Debug signing keys may differ between CI runs; uninstall an old test installation if Android reports a signing conflict.'
             echo ''
             echo 'Future Play release: configure your own PK_ANDROID_KEYSTORE_PATH, PK_ANDROID_KEYSTORE_PASSWORD, PK_ANDROID_KEY_ALIAS and PK_ANDROID_KEY_PASSWORD in a trusted release environment. The signing task graph was dry-run only. No AAB was created; real release signing, Play Console requirements and phone/device testing remain pending.'
+            echo ''
+            echo '### Icon / splash and native validation'
+            echo 'The exact approved PNG is retained under resources/approved-icon.png. Launcher assets cover all five densities; adaptive and splash artwork is padded inside Android mask-safe circles. AndroidX installs the native splash before Activity creation. App label: Prem Kumar Technicians.'
+            echo ''
+            cat artifacts/ci/native-validation.txt
             echo ''
             echo '### APK SHA-256'
             echo '```text'

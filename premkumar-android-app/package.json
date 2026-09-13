@@ -18,7 +18,8 @@
     "test": "playwright test",
     "icons": "node scripts/generate-icons.mjs",
     "check:config": "tsc --noEmit --skipLibCheck --moduleResolution bundler --module esnext capacitor.config.ts",
-    "doctor:android": "node scripts/toolchain-doctor.mjs"
+    "doctor:android": "node scripts/toolchain-doctor.mjs",
+    "check:icons": "node --test scripts/icon-assets.test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "8.4.3",
