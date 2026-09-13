@@ -1,0 +1,86 @@
+apply plugin: 'com.android.application'
+
+// Optional future Play upload signing: never store a release keystore/password in Git.
+// Debug builds require no release secrets and keep the standard debug signature.
+def releaseSigningValues = [
+    storeFile: System.getenv('PK_ANDROID_KEYSTORE_PATH'),
+    storePassword: System.getenv('PK_ANDROID_KEYSTORE_PASSWORD'),
+    keyAlias: System.getenv('PK_ANDROID_KEY_ALIAS'),
+    keyPassword: System.getenv('PK_ANDROID_KEY_PASSWORD')
+]
+def hasReleaseSigning = releaseSigningValues.values().every { it != null && !it.isEmpty() }
+def hasPartialReleaseSigning = releaseSigningValues.values().any { it != null && !it.isEmpty() }
+if (hasPartialReleaseSigning && !hasReleaseSigning) {
+    throw new GradleException('Set all four PK_ANDROID_KEYSTORE_PATH / PK_ANDROID_KEYSTORE_PASSWORD / PK_ANDROID_KEY_ALIAS / PK_ANDROID_KEY_PASSWORD values, or none for debug builds.')
+}
+if (hasReleaseSigning && !file(releaseSigningValues.storeFile).isFile()) {
+    throw new GradleException('The configured release keystore file does not exist.')
+}
+
+android {
+    namespace = "com.premkumar.technicians"
+    compileSdk = rootProject.ext.compileSdkVersion
+    buildToolsVersion = "35.0.0"
+    defaultConfig {
+        applicationId "com.premkumar.technicians"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "0.1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            playUpload {
+                storeFile file(releaseSigningValues.storeFile)
+                storePassword releaseSigningValues.storePassword
+                keyAlias releaseSigningValues.keyAlias
+                keyPassword releaseSigningValues.keyPassword
+            }
+        }
+    }
+    buildTypes {
+        release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.playUpload
+            }
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+// Fail closed for real release packaging, instead of accidentally producing an unsigned upload.
+// CI may inspect the task graph with --dry-run without creating any release artifact.
+gradle.taskGraph.whenReady { graph ->
+    if (!gradle.startParameter.dryRun && !hasReleaseSigning &&
+        (graph.hasTask(':app:bundleRelease') || graph.hasTask(':app:assembleRelease'))) {
+        throw new GradleException('Release packaging requires your own Play upload keystore and all four PK_ANDROID_* signing environment variables. Debug signing is not a Play release key.')
+    }
+}
+

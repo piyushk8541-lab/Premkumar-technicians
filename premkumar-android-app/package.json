@@ -1,0 +1,44 @@
+{
+  "name": "premkumar-technicians-android",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Independent, locally bundled Capacitor Android app for Prem Kumar Technicians",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "sync:android": "npm run build && cap sync android",
+    "android": "cap open android",
+    "apk:debug": "npm run sync:android && cd android && ./gradlew assembleDebug",
+    "verify:website": "node scripts/verify-website-unchanged.mjs",
+    "test": "playwright test",
+    "icons": "node scripts/generate-icons.mjs",
+    "check:config": "tsc --noEmit --skipLibCheck --moduleResolution bundler --module esnext capacitor.config.ts",
+    "doctor:android": "node scripts/toolchain-doctor.mjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.4.3",
+    "@capacitor/app": "8.1.1",
+    "@capacitor/core": "8.4.3",
+    "@fontsource/noto-sans-devanagari": "5.2.8",
+    "@fontsource/poppins": "5.2.7",
+    "@fortawesome/fontawesome-free": "6.5.2",
+    "alpinejs": "3.17.2",
+    "aos": "2.3.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.4.3",
+    "@playwright/test": "1.58.2",
+    "@sparticuz/chromium": "143.0.4",
+    "autoprefixer": "10.4.27",
+    "postcss": "8.5.28",
+    "sharp": "0.35.4",
+    "tailwindcss": "3.4.19",
+    "typescript": "5.9.3",
+    "vite": "6.4.3"
+  }
+}

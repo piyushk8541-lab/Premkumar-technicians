@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "arena/01a09a19-premkumar-technicians": false
+    }
+  }
+}
