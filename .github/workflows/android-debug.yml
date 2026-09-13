@@ -160,7 +160,18 @@ jobs:
         # --dry-run executes no release tasks and produces no signed/unsigned AAB.
         # A real Play upload must use the owner's private upload key, never this debug key.
         run: |
-          export PK_ANDROID_KEYSTORE_PATH="$HOME/.android/debug.keystore"
+          # AGP can use Android's XDG user directory; do not assume ~/.android.
+          (cd android && ./gradlew --no-daemon --console=plain :app:signingReport) > artifacts/ci/debug-signing-report.txt
+          export PK_ANDROID_KEYSTORE_PATH="$(python3 - <<'PY'
+          import pathlib, re
+          report = pathlib.Path('artifacts/ci/debug-signing-report.txt').read_text()
+          match = re.search(r'Variant: debug\s+Config: debug\s+Store: ([^\r\n]+)', report)
+          assert match, 'Gradle did not report the debug signing store'
+          path = pathlib.Path(match.group(1).strip())
+          assert path.is_file(), f'Reported debug keystore is missing: {path}'
+          print(path)
+          PY
+          )"
           export PK_ANDROID_KEYSTORE_PASSWORD=android
           export PK_ANDROID_KEY_ALIAS=androiddebugkey
           export PK_ANDROID_KEY_PASSWORD=android
