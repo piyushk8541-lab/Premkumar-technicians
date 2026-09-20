@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Prem Kumar Technicians</string>
+    <string name="title_activity_main">Prem Kumar Technicians</string>
+    <string name="package_name">com.premkumar.technicians</string>
+    <string name="custom_url_scheme">com.premkumar.technicians</string>
+</resources>
