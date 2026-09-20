@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - arena/01a0be36-premkumar-technicians
+      - arena/01a09a19-premkumar-technicians
     paths:
       - premkumar-technicians-app/**
       - .github/workflows/android-build.yml
@@ -18,7 +19,7 @@ concurrency:
 
 jobs:
   build-and-test:
-    if: github.ref == 'refs/heads/arena/01a0be36-premkumar-technicians'
+    if: github.ref == 'refs/heads/arena/01a0be36-premkumar-technicians' || github.ref == 'refs/heads/arena/01a09a19-premkumar-technicians'
     environment: android-release
     runs-on: ubuntu-24.04
     timeout-minutes: 30
