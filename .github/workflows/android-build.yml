@@ -1,0 +1,137 @@
+name: Android Build & Deliverables
+
+on:
+  push:
+    branches:
+      - arena/01a0be36-premkumar-technicians
+    paths:
+      - premkumar-technicians-app/**
+      - .github/workflows/android-build.yml
+      - vercel.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-deliver:
+    if: github.ref == 'refs/heads/arena/01a0be36-premkumar-technicians'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify original website integrity
+        run: |
+          node premkumar-technicians-app/scripts/verify-website-unchanged.mjs
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: premkumar-technicians-app/package-lock.json
+
+      - name: Set up Java JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '13114758'
+          accept-android-sdk-licenses: true
+          packages: platform-tools
+
+      - name: Install Android Platforms and Build Tools
+        run: |
+          sdkmanager "platforms;android-36" "build-tools;35.0.0"
+
+      - name: Set up Gradle Cache
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Install dependencies & run test suite
+        working-directory: premkumar-technicians-app
+        run: |
+          npm ci || npm install
+          npm test
+          node scripts/generate-icons.mjs
+          npm run build
+          npm run sync:android
+
+      - name: Build Debug APK & Run Unit Tests
+        working-directory: premkumar-technicians-app/android
+        run: |
+          chmod +x gradlew
+          ./gradlew --version
+          ./gradlew --no-daemon --stacktrace :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
+          test -s app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Build Release APK and Google Play AAB
+        working-directory: premkumar-technicians-app/android
+        run: |
+          keytool -genkeypair -v -keystore "$RUNNER_TEMP/upload.keystore" -alias premkumar_upload \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass premkumar123 -keypass premkumar123 \
+            -dname "CN=Prem Kumar, OU=Technicians, O=Prem Kumar Technicians, L=Darbhanga, ST=Bihar, C=IN"
+          
+          export PK_ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/upload.keystore"
+          export PK_ANDROID_KEYSTORE_PASSWORD="premkumar123"
+          export PK_ANDROID_KEY_ALIAS="premkumar_upload"
+          export PK_ANDROID_KEY_PASSWORD="premkumar123"
+          export PK_ANDROID_VERSION_CODE="1"
+          export PK_ANDROID_VERSION_NAME="1.0.0"
+
+          ./gradlew --no-daemon :app:assembleRelease :app:bundleRelease
+          test -s app/build/outputs/apk/release/app-release.apk
+          test -s app/build/outputs/bundle/release/app-release.aab
+
+      - name: Verify APK Signatures & Metadata
+        working-directory: premkumar-technicians-app/android
+        run: |
+          tools="$ANDROID_HOME/build-tools/35.0.0"
+          "$tools/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
+          "$tools/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
+          "$tools/aapt" dump badging app/build/outputs/apk/release/app-release.apk | grep -E "package: name='com.premkumar.technicians'|application-label:'Prem Kumar Technicians'"
+
+      - name: Prepare build artifacts directory
+        run: |
+          mkdir -p premkumar-technicians-app/build-artifacts
+          cp premkumar-technicians-app/android/app/build/outputs/apk/debug/app-debug.apk premkumar-technicians-app/build-artifacts/app-debug.apk
+          cp premkumar-technicians-app/android/app/build/outputs/apk/release/app-release.apk premkumar-technicians-app/build-artifacts/app-release.apk
+          cp premkumar-technicians-app/android/app/build/outputs/bundle/release/app-release.aab premkumar-technicians-app/build-artifacts/app-release.aab
+          cd premkumar-technicians-app/build-artifacts
+          sha256sum app-debug.apk app-release.apk app-release.aab > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload GitHub Actions Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: premkumar-technicians-android-artifacts
+          path: premkumar-technicians-app/build-artifacts/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Commit build artifacts to repository branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add premkumar-technicians-app/build-artifacts/
+          git commit -m "build(android): deliver verified APK and AAB artifacts [skip ci]" || echo "No artifact diff"
+          git push origin arena/01a0be36-premkumar-technicians
+
+      - name: Recheck website hashes after native build
+        run: |
+          node premkumar-technicians-app/scripts/verify-website-unchanged.mjs
