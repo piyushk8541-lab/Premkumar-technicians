@@ -19,6 +19,7 @@ concurrency:
 jobs:
   build-and-test:
     if: github.ref == 'refs/heads/arena/01a0be36-premkumar-technicians'
+    environment: android-release
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -95,9 +96,8 @@ jobs:
           KEY_ALIAS: ${{ secrets.PK_ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.PK_ANDROID_KEY_PASSWORD }}
         run: |
-          # Verify release task graph without executing release packaging tasks
           ./gradlew --no-daemon :app:bundleRelease --dry-run
-          
+
           if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
             echo "has_secrets=true" >> "$GITHUB_OUTPUT"
             echo "Production signing secrets are available."
