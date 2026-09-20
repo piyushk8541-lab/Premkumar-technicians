@@ -7,7 +7,6 @@ on:
     paths:
       - premkumar-technicians-app/**
       - .github/workflows/android-build.yml
-      - vercel.json
   workflow_dispatch:
 
 permissions:
@@ -18,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-deliver:
+  build-and-test:
     if: github.ref == 'refs/heads/arena/01a0be36-premkumar-technicians'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -71,7 +70,7 @@ jobs:
           npm run build
           npm run sync:android
 
-      - name: Build Debug APK & Run Unit Tests
+      - name: Build Debug APK, Run Unit Tests & Lint
         working-directory: premkumar-technicians-app/android
         run: |
           chmod +x gradlew
@@ -79,41 +78,70 @@ jobs:
           ./gradlew --no-daemon --stacktrace :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
           test -s app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Build Release APK and Google Play AAB
-        working-directory: premkumar-technicians-app/android
-        run: |
-          keytool -genkeypair -v -keystore "$RUNNER_TEMP/upload.keystore" -alias premkumar_upload \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass premkumar123 -keypass premkumar123 \
-            -dname "CN=Prem Kumar, OU=Technicians, O=Prem Kumar Technicians, L=Darbhanga, ST=Bihar, C=IN"
-          
-          export PK_ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/upload.keystore"
-          export PK_ANDROID_KEYSTORE_PASSWORD="premkumar123"
-          export PK_ANDROID_KEY_ALIAS="premkumar_upload"
-          export PK_ANDROID_KEY_PASSWORD="premkumar123"
-          export PK_ANDROID_VERSION_CODE="1"
-          export PK_ANDROID_VERSION_NAME="1.0.0"
-
-          ./gradlew --no-daemon :app:assembleRelease :app:bundleRelease
-          test -s app/build/outputs/apk/release/app-release.apk
-          test -s app/build/outputs/bundle/release/app-release.aab
-
-      - name: Verify APK Signatures & Metadata
+      - name: Verify Debug APK Signature and Metadata
         working-directory: premkumar-technicians-app/android
         run: |
           tools="$ANDROID_HOME/build-tools/35.0.0"
-          "$tools/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
+          apk=app/build/outputs/apk/debug/app-debug.apk
+          "$tools/apksigner" verify --verbose "$apk"
+          "$tools/aapt" dump badging "$apk" | grep -E "package: name='com.premkumar.technicians'|application-label:'Prem Kumar Technicians'"
+
+      - name: Validate Release Task Graph & Check Signing Secrets
+        id: release_check
+        working-directory: premkumar-technicians-app/android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.PK_ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.PK_ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.PK_ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.PK_ANDROID_KEY_PASSWORD }}
+        run: |
+          # Verify release task graph without executing release packaging tasks
+          ./gradlew --no-daemon :app:bundleRelease --dry-run
+          
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "has_secrets=true" >> "$GITHUB_OUTPUT"
+            echo "Production signing secrets are available."
+          else
+            echo "has_secrets=false" >> "$GITHUB_OUTPUT"
+            echo "Signing secrets are not configured in this branch. Temporary keys will NOT be generated."
+            echo "Release packaging is deferred until owner-configured secrets are provided."
+          fi
+
+      - name: Build Signed Release APK and AAB (Only if Secrets Provided)
+        if: steps.release_check.outputs.has_secrets == 'true'
+        working-directory: premkumar-technicians-app/android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.PK_ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          PK_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.PK_ANDROID_KEYSTORE_PASSWORD }}
+          PK_ANDROID_KEY_ALIAS: ${{ secrets.PK_ANDROID_KEY_ALIAS }}
+          PK_ANDROID_KEY_PASSWORD: ${{ secrets.PK_ANDROID_KEY_PASSWORD }}
+          PK_ANDROID_VERSION_CODE: ${{ vars.PK_ANDROID_VERSION_CODE || '1' }}
+          PK_ANDROID_VERSION_NAME: ${{ vars.PK_ANDROID_VERSION_NAME || '1.0.0' }}
+        run: |
+          KEY_DIR="$(mktemp -d "$RUNNER_TEMP/pk-release.XXXXXXXX")"
+          trap 'rm -rf -- "$KEY_DIR"' EXIT
+          export PK_ANDROID_KEYSTORE_PATH="$KEY_DIR/upload.keystore"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$PK_ANDROID_KEYSTORE_PATH"
+          chmod 600 "$PK_ANDROID_KEYSTORE_PATH"
+
+          ./gradlew --no-daemon --no-build-cache :app:assembleRelease :app:bundleRelease
+          test -s app/build/outputs/apk/release/app-release.apk
+          test -s app/build/outputs/bundle/release/app-release.aab
+
+          tools="$ANDROID_HOME/build-tools/35.0.0"
           "$tools/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
           "$tools/aapt" dump badging app/build/outputs/apk/release/app-release.apk | grep -E "package: name='com.premkumar.technicians'|application-label:'Prem Kumar Technicians'"
+
+          mkdir -p ../build-artifacts
+          cp app/build/outputs/apk/release/app-release.apk ../build-artifacts/
+          cp app/build/outputs/bundle/release/app-release.aab ../build-artifacts/
 
       - name: Prepare build artifacts directory
         run: |
           mkdir -p premkumar-technicians-app/build-artifacts
           cp premkumar-technicians-app/android/app/build/outputs/apk/debug/app-debug.apk premkumar-technicians-app/build-artifacts/app-debug.apk
-          cp premkumar-technicians-app/android/app/build/outputs/apk/release/app-release.apk premkumar-technicians-app/build-artifacts/app-release.apk
-          cp premkumar-technicians-app/android/app/build/outputs/bundle/release/app-release.aab premkumar-technicians-app/build-artifacts/app-release.aab
           cd premkumar-technicians-app/build-artifacts
-          sha256sum app-debug.apk app-release.apk app-release.aab > SHA256SUMS.txt
+          sha256sum app-debug.apk $(test -f app-release.apk && echo "app-release.apk") $(test -f app-release.aab && echo "app-release.aab") > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Upload GitHub Actions Artifacts
@@ -129,7 +157,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add premkumar-technicians-app/build-artifacts/
-          git commit -m "build(android): deliver verified APK and AAB artifacts [skip ci]" || echo "No artifact diff"
+          git commit -m "build(android): deliver verified debug APK artifact [skip ci]" || echo "No artifact diff"
           git push origin arena/01a0be36-premkumar-technicians
 
       - name: Recheck website hashes after native build

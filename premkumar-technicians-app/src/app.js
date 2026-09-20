@@ -546,7 +546,7 @@ function renderHomeTab() {
             <div class="flex items-center space-x-1 mt-0.5">
               <div class="flex text-amber-400">${renderIcon('star', 'w-3.5 h-3.5')}${renderIcon('star', 'w-3.5 h-3.5')}${renderIcon('star', 'w-3.5 h-3.5')}${renderIcon('star', 'w-3.5 h-3.5')}${renderIcon('star', 'w-3.5 h-3.5')}</div>
               <span class="text-xs font-bold text-slate-800">4.9 / 5</span>
-              <span class="text-[10px] text-slate-500">(500+ verified jobs)</span>
+              <span class="text-[10px] text-slate-500">(500+ customer reviews)</span>
             </div>
           </div>
           <button id="view-all-reviews-link" class="text-xs font-bold text-blue-600 hover:text-blue-700">All Reviews →</button>
@@ -565,13 +565,13 @@ function renderHomeTab() {
         </div>
       </div>
 
-      <!-- Emergency Contact Banner -->
+      <!-- Contact Note Banner -->
       <div class="mx-4 bg-amber-50 border border-amber-200 rounded-2xl p-3.5 text-center">
-        <p class="text-xs font-bold text-amber-950">Appliance breakdown outside normal hours?</p>
-        <p class="text-[11px] text-amber-800 mt-0.5">Prem Kumar accepts urgent & emergency repair calls 24/7 across Darbhanga.</p>
+        <p class="text-xs font-bold text-amber-950">Direct Phone Support</p>
+        <p class="text-[11px] text-amber-800 mt-0.5">${BUSINESS_INFO.contactNote}</p>
         <button id="emergency-call-btn" class="mt-2.5 inline-flex items-center space-x-1.5 bg-amber-500 hover:bg-amber-600 text-app-navy font-bold text-xs py-2 px-4 rounded-xl shadow-sm transition">
           ${renderIcon('phone', 'w-3.5 h-3.5 text-app-navy')}
-          <span>Call Prem Kumar Directly: 082710 46196</span>
+          <span>Call Prem Kumar: 082710 46196</span>
         </button>
       </div>
 
@@ -1044,7 +1044,7 @@ function renderReviewsTab() {
       <div class="mx-4 mt-3 bg-gradient-to-br from-app-navy to-app-navyLight text-white rounded-2xl p-4 shadow-card">
         <div class="flex items-center justify-between">
           <div>
-            <span class="text-[10px] font-bold uppercase tracking-wider text-amber-300">Verified Customer Ratings</span>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-amber-300">Customer Ratings & Feedback</span>
             <div class="flex items-baseline space-x-2 mt-1">
               <span class="text-3xl font-black text-white">4.9</span>
               <span class="text-sm text-slate-300">out of 5.0</span>
@@ -1089,7 +1089,7 @@ function renderReviewsTab() {
       <!-- Verified Customer Reviews List -->
       <div class="mx-4 space-y-3">
         <div class="flex items-center justify-between text-xs px-1">
-          <h3 class="font-bold text-slate-800">Verified Darbhanga Customers</h3>
+          <h3 class="font-bold text-slate-800">Customer Feedback</h3>
           <span class="text-slate-500">${filtered.length} Reviews</span>
         </div>
 
@@ -1227,6 +1227,10 @@ function renderMoreTab() {
               </div>
             </div>
             <span class="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">Open Daily</span>
+          </div>
+
+          <div class="p-2 bg-amber-50 rounded-xl border border-amber-200/50 text-[11px] text-amber-900">
+            ℹ️ ${BUSINESS_INFO.contactNote}
           </div>
         </div>
       </div>
